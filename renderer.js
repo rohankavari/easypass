@@ -69,20 +69,8 @@ class SSHPasswordManager {
 
     async loadPasswords() {
         try {
-            // Clear any existing sample data for fresh start
-            if (!localStorage.getItem('userDataInitialized')) {
-                localStorage.removeItem('sshPasswords');
-                localStorage.setItem('userDataInitialized', 'true');
-            }
-            
-            // Try to load from storage first
-            const stored = localStorage.getItem('sshPasswords');
-            if (stored) {
-                this.passwords = JSON.parse(stored);
-            } else {
-                // Start with empty array - no sample data
-                this.passwords = [];
-            }
+            // Load passwords using the new file-based storage
+            this.passwords = await window.electronAPI.loadPasswords();
         } catch (error) {
             console.error('Error loading passwords:', error);
             this.passwords = [];
@@ -91,9 +79,12 @@ class SSHPasswordManager {
         this.renderPasswordList();
     }
 
-    savePasswords() {
+    async savePasswords() {
         try {
-            localStorage.setItem('sshPasswords', JSON.stringify(this.passwords));
+            const success = await window.electronAPI.savePasswords(this.passwords);
+            if (!success) {
+                this.showStatusMessage('Error saving passwords', 'error');
+            }
         } catch (error) {
             console.error('Error saving passwords:', error);
             this.showStatusMessage('Error saving passwords', 'error');

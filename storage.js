@@ -1,18 +1,65 @@
 // Storage utility for EasyPass
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
 class PasswordStorage {
     constructor() {
         this.storageKey = 'sshPasswords';
         this.settingsKey = 'sshPasswordsSettings';
+        this.dataDir = this.getDataDirectory();
+        this.passwordsFile = path.join(this.dataDir, 'passwords.json');
+        this.settingsFile = path.join(this.dataDir, 'settings.json');
+        this.ensureDataDirectory();
     }
 
-    // Load passwords from localStorage
+    // Get the appropriate data directory for the platform
+    getDataDirectory() {
+        const appName = 'easypass';
+        
+        switch (process.platform) {
+            case 'linux':
+                return path.join(os.homedir(), '.config', appName);
+            case 'darwin':
+                return path.join(os.homedir(), 'Library', 'Application Support', appName);
+            case 'win32':
+                return path.join(os.homedir(), 'AppData', 'Roaming', appName);
+            default:
+                return path.join(os.homedir(), '.config', appName);
+        }
+    }
+
+    // Ensure data directory exists
+    ensureDataDirectory() {
+        try {
+            if (!fs.existsSync(this.dataDir)) {
+                fs.mkdirSync(this.dataDir, { recursive: true });
+            }
+        } catch (error) {
+            console.error('Error creating data directory:', error);
+        }
+    }
+
+    // Load passwords from file storage
     async loadPasswords() {
         try {
+            // First try to load from file storage
+            if (fs.existsSync(this.passwordsFile)) {
+                const data = fs.readFileSync(this.passwordsFile, 'utf8');
+                const passwords = JSON.parse(data);
+                return this.validatePasswords(passwords);
+            }
+            
+            // Fallback to localStorage for migration
             const stored = localStorage.getItem(this.storageKey);
             if (stored) {
                 const passwords = JSON.parse(stored);
-                return this.validatePasswords(passwords);
+                const validatedPasswords = this.validatePasswords(passwords);
+                // Migrate to file storage
+                await this.savePasswords(validatedPasswords);
+                return validatedPasswords;
             }
+            
             return [];
         } catch (error) {
             console.error('Error loading passwords:', error);
@@ -20,11 +67,17 @@ class PasswordStorage {
         }
     }
 
-    // Save passwords to localStorage
+    // Save passwords to file storage
     async savePasswords(passwords) {
         try {
             const validatedPasswords = this.validatePasswords(passwords);
+            
+            // Save to file storage
+            fs.writeFileSync(this.passwordsFile, JSON.stringify(validatedPasswords, null, 2));
+            
+            // Also save to localStorage for backward compatibility
             localStorage.setItem(this.storageKey, JSON.stringify(validatedPasswords));
+            
             return true;
         } catch (error) {
             console.error('Error saving passwords:', error);
@@ -58,10 +111,21 @@ class PasswordStorage {
     // Load application settings
     async loadSettings() {
         try {
+            // First try to load from file storage
+            if (fs.existsSync(this.settingsFile)) {
+                const data = fs.readFileSync(this.settingsFile, 'utf8');
+                return JSON.parse(data);
+            }
+            
+            // Fallback to localStorage for migration
             const stored = localStorage.getItem(this.settingsKey);
             if (stored) {
-                return JSON.parse(stored);
+                const settings = JSON.parse(stored);
+                // Migrate to file storage
+                await this.saveSettings(settings);
+                return settings;
             }
+            
             return this.getDefaultSettings();
         } catch (error) {
             console.error('Error loading settings:', error);
@@ -72,7 +136,12 @@ class PasswordStorage {
     // Save application settings
     async saveSettings(settings) {
         try {
+            // Save to file storage
+            fs.writeFileSync(this.settingsFile, JSON.stringify(settings, null, 2));
+            
+            // Also save to localStorage for backward compatibility
             localStorage.setItem(this.settingsKey, JSON.stringify(settings));
+            
             return true;
         } catch (error) {
             console.error('Error saving settings:', error);
@@ -126,8 +195,18 @@ class PasswordStorage {
     // Clear all data
     async clearAllData() {
         try {
+            // Clear file storage
+            if (fs.existsSync(this.passwordsFile)) {
+                fs.unlinkSync(this.passwordsFile);
+            }
+            if (fs.existsSync(this.settingsFile)) {
+                fs.unlinkSync(this.settingsFile);
+            }
+            
+            // Clear localStorage
             localStorage.removeItem(this.storageKey);
             localStorage.removeItem(this.settingsKey);
+            
             return true;
         } catch (error) {
             console.error('Error clearing data:', error);
@@ -138,19 +217,36 @@ class PasswordStorage {
     // Get storage statistics
     getStorageStats() {
         try {
-            const passwordsData = localStorage.getItem(this.storageKey);
-            const settingsData = localStorage.getItem(this.settingsKey);
+            let passwordsSize = 0;
+            let settingsSize = 0;
+            
+            // Check file storage
+            if (fs.existsSync(this.passwordsFile)) {
+                const stats = fs.statSync(this.passwordsFile);
+                passwordsSize = stats.size;
+            }
+            
+            if (fs.existsSync(this.settingsFile)) {
+                const stats = fs.statSync(this.settingsFile);
+                settingsSize = stats.size;
+            }
             
             return {
-                passwordsSize: passwordsData ? passwordsData.length : 0,
-                settingsSize: settingsData ? settingsData.length : 0,
-                totalSize: (passwordsData ? passwordsData.length : 0) + (settingsData ? settingsData.length : 0),
-                lastModified: new Date().toISOString()
+                passwordsSize,
+                settingsSize,
+                totalSize: passwordsSize + settingsSize,
+                lastModified: new Date().toISOString(),
+                storageType: 'file'
             };
         } catch (error) {
             console.error('Error getting storage stats:', error);
             return null;
         }
+    }
+
+    // Get data directory path for user reference
+    getDataDirectoryPath() {
+        return this.dataDir;
     }
 }
 

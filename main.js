@@ -1,10 +1,15 @@
 const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
+const PasswordStorage = require('./storage.js');
 
 // Keep a global reference of the window object
 let mainWindow;
+let passwordStorage;
 
 function createWindow() {
+    // Initialize password storage
+    passwordStorage = new PasswordStorage();
+
     // Create the browser window
     mainWindow = new BrowserWindow({
         width: 400,
@@ -176,4 +181,49 @@ ipcMain.handle('app-version', () => {
 ipcMain.handle('check-for-updates', () => {
     // Implement auto-updater logic here
     return { hasUpdate: false };
+});
+
+// Storage IPC handlers
+ipcMain.handle('load-passwords', async () => {
+    try {
+        return await passwordStorage.loadPasswords();
+    } catch (error) {
+        console.error('Error loading passwords:', error);
+        return [];
+    }
+});
+
+ipcMain.handle('save-passwords', async (event, passwords) => {
+    try {
+        return await passwordStorage.savePasswords(passwords);
+    } catch (error) {
+        console.error('Error saving passwords:', error);
+        return false;
+    }
+});
+
+ipcMain.handle('load-settings', async () => {
+    try {
+        return await passwordStorage.loadSettings();
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        return passwordStorage.getDefaultSettings();
+    }
+});
+
+ipcMain.handle('save-settings', async (event, settings) => {
+    try {
+        return await passwordStorage.saveSettings(settings);
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        return false;
+    }
+});
+
+ipcMain.handle('get-data-directory', () => {
+    return passwordStorage.getDataDirectoryPath();
+});
+
+ipcMain.handle('get-storage-stats', () => {
+    return passwordStorage.getStorageStats();
 });

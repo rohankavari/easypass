@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
     showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
     
+    // Storage operations
+    loadPasswords: () => ipcRenderer.invoke('load-passwords'),
+    savePasswords: (passwords) => ipcRenderer.invoke('save-passwords', passwords),
+    loadSettings: () => ipcRenderer.invoke('load-settings'),
+    saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+    getDataDirectory: () => ipcRenderer.invoke('get-data-directory'),
+    getStorageStats: () => ipcRenderer.invoke('get-storage-stats'),
+    
     // Listen for menu events
     onMenuAction: (callback) => {
         ipcRenderer.on('add-new-entry', callback);

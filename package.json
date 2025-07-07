@@ -1,6 +1,6 @@
 {
   "name": "easypass",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple and secure password manager for easy access to your passwords",
   "homepage": "https://github.com/yourname/easypass",
   "main": "main.js",
@@ -75,6 +75,12 @@
         "libgbm1",
         "libxkbcommon0",
         "libasound2"
+      ],
+      "afterInstall": "scripts/postinst.sh",
+      "afterRemove": "scripts/postrm.sh",
+      "fpm": [
+        "--after-install=scripts/postinst.sh",
+        "--after-remove=scripts/postrm.sh"
       ]
     },
     "appImage": {
