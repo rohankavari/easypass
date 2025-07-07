@@ -4,6 +4,8 @@ class SSHPasswordManager {
         this.passwords = [];
         this.currentEditId = null;
         this.copyTimeout = null;
+        this.draggedElement = null;
+        this.dragStartIndex = -1;
         
         this.initializeElements();
         this.attachEventListeners();
@@ -110,20 +112,20 @@ class SSHPasswordManager {
             return;
         }
 
-        this.passwordList.innerHTML = this.passwords.map(password => `
-            <div class="password-item" data-id="${password.id}">
+        this.passwordList.innerHTML = this.passwords.map((password, index) => `
+            <div class="password-item" data-id="${password.id}" draggable="true">
                 <div class="password-info">
                     <div class="password-name">${this.escapeHtml(password.name)}</div>
                     ${password.description ? `<div class="password-description">${this.escapeHtml(password.description)}</div>` : ''}
                 </div>
                 <div class="password-actions">
-                    <button class="copy-btn" onclick="passwordManager.copyPassword(${password.id})">Copy</button>
-                    <button class="edit-btn" onclick="passwordManager.editPassword(${password.id})" title="Edit">
+                    <button class="copy-btn" tabindex="0" onclick="passwordManager.copyPassword(${password.id})">Copy</button>
+                    <button class="edit-btn" tabindex="-1" onclick="passwordManager.editPassword(${password.id})" title="Edit">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                         </svg>
                     </button>
-                    <button class="delete-btn" onclick="passwordManager.deletePassword(${password.id})" title="Delete">
+                    <button class="delete-btn" tabindex="-1" onclick="passwordManager.deletePassword(${password.id})" title="Delete">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                         </svg>
@@ -131,6 +133,9 @@ class SSHPasswordManager {
                 </div>
             </div>
         `).join('');
+
+        // Add drag and drop event listeners
+        this.attachDragAndDropListeners();
     }
 
     openModal(editId = null) {
@@ -283,6 +288,123 @@ class SSHPasswordManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    attachDragAndDropListeners() {
+        const passwordItems = this.passwordList.querySelectorAll('.password-item');
+        
+        passwordItems.forEach((item, index) => {
+            // Drag start
+            item.addEventListener('dragstart', (e) => {
+                this.draggedElement = item;
+                this.dragStartIndex = index;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/html', item.outerHTML);
+            });
+
+            // Drag end
+            item.addEventListener('dragend', (e) => {
+                item.classList.remove('dragging');
+                this.clearDragOverStates();
+                this.draggedElement = null;
+                this.dragStartIndex = -1;
+            });
+
+            // Drag over
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                
+                if (this.draggedElement && this.draggedElement !== item) {
+                    const rect = item.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+                    const mouseY = e.clientY;
+                    
+                    // Clear previous states
+                    item.classList.remove('drag-over-above', 'drag-over-below');
+                    
+                    if (mouseY < midY) {
+                        item.classList.add('drag-over-above');
+                    } else {
+                        item.classList.add('drag-over-below');
+                    }
+                }
+            });
+
+            // Drag leave
+            item.addEventListener('dragleave', (e) => {
+                if (!item.contains(e.relatedTarget)) {
+                    item.classList.remove('drag-over-above', 'drag-over-below');
+                }
+            });
+
+            // Drop
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                
+                if (this.draggedElement && this.draggedElement !== item) {
+                    const draggedId = parseInt(this.draggedElement.getAttribute('data-id'));
+                    const targetId = parseInt(item.getAttribute('data-id'));
+                    
+                    this.reorderPasswords(draggedId, targetId, e.clientY);
+                }
+                
+                this.clearDragOverStates();
+            });
+        });
+
+        // Add keyboard event listeners for copy buttons
+        const copyButtons = this.passwordList.querySelectorAll('.copy-btn');
+        copyButtons.forEach(button => {
+            button.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const passwordId = parseInt(button.closest('.password-item').getAttribute('data-id'));
+                    this.copyPassword(passwordId);
+                }
+            });
+        });
+    }
+
+    clearDragOverStates() {
+        const passwordItems = this.passwordList.querySelectorAll('.password-item');
+        passwordItems.forEach(item => {
+            item.classList.remove('drag-over-above', 'drag-over-below');
+        });
+    }
+
+    reorderPasswords(draggedId, targetId, mouseY) {
+        const draggedIndex = this.passwords.findIndex(p => p.id === draggedId);
+        const targetIndex = this.passwords.findIndex(p => p.id === targetId);
+        
+        if (draggedIndex === -1 || targetIndex === -1) return;
+        
+        const draggedItem = this.passwords[draggedIndex];
+        const targetItem = this.passwords[targetIndex];
+        const targetRect = this.passwordList.querySelector(`[data-id="${targetId}"]`).getBoundingClientRect();
+        const midY = targetRect.top + targetRect.height / 2;
+        
+        // Remove the dragged item
+        this.passwords.splice(draggedIndex, 1);
+        
+        // Determine insert position
+        let newIndex;
+        if (mouseY < midY) {
+            // Insert above the target
+            newIndex = targetIndex > draggedIndex ? targetIndex - 1 : targetIndex;
+        } else {
+            // Insert below the target
+            newIndex = targetIndex > draggedIndex ? targetIndex : targetIndex + 1;
+        }
+        
+        // Insert the dragged item at the new position
+        this.passwords.splice(newIndex, 0, draggedItem);
+        
+        // Save and re-render
+        this.savePasswords();
+        this.renderPasswordList();
+        this.showStatusMessage('Password order updated', 'success');
     }
 }
 

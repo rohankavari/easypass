@@ -99,6 +99,8 @@ body {
     padding: 16px 20px;
     border-bottom: 1px solid #f1f3f4;
     transition: background-color 0.2s ease;
+    cursor: grab;
+    user-select: none;
 }
 
 .password-item:last-child {
@@ -109,8 +111,34 @@ body {
     background: #f8f9fa;
 }
 
+.password-item.dragging {
+    opacity: 0.5;
+    transform: rotate(2deg);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    position: relative;
+}
+
+.password-item.drag-over {
+    border-top: 2px solid #007bff;
+    background: #f0f8ff;
+}
+
+.password-item.drag-over-above {
+    border-top: 2px solid #007bff;
+}
+
+.password-item.drag-over-below {
+    border-bottom: 2px solid #007bff;
+}
+
+.password-item:active {
+    cursor: grabbing;
+}
+
 .password-info {
     flex: 1;
+    pointer-events: none;
 }
 
 .password-name {
@@ -128,6 +156,7 @@ body {
 .password-actions {
     display: flex;
     gap: 8px;
+    pointer-events: auto;
 }
 
 .copy-btn {
@@ -146,9 +175,19 @@ body {
     background: #dee2e6;
 }
 
+.copy-btn:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+    background: #dee2e6;
+}
+
 .copy-btn.copied {
     background: #d4edda;
     color: #155724;
+}
+
+.copy-btn.copied:focus {
+    outline: 2px solid #28a745;
 }
 
 .edit-btn, .delete-btn {
